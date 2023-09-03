@@ -1,16 +1,28 @@
 use std::f32::consts::PI;
 
-use bevy::prelude::*;
+use bevy::{
+    asset::LoadState,
+    core_pipeline::Skybox,
+    prelude::*,
+    render::render_resource::{TextureViewDescriptor, TextureViewDimension},
+};
 use bevy_rapier3d::prelude::*;
 
 #[derive(Component)]
 struct Player;
+
+#[derive(Resource)]
+struct Cubemap {
+    is_loaded: bool,
+    image_handle: Handle<Image>,
+}
 
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .add_plugins(RapierPhysicsPlugin::<NoUserData>::default())
         .add_systems(Startup, setup_world)
+        .add_systems(Update, correct_skybox)
         .add_systems(Update, follow_player)
         .add_systems(Update, handle_input)
         .run();
@@ -19,14 +31,26 @@ fn main() {
 /// Sets up the environment.
 fn setup_world(
     mut commands: Commands,
+    asset_server: Res<AssetServer>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    // Spawns the camera.
-    commands.spawn(Camera3dBundle {
-        transform: Transform::from_xyz(0.0, 0.0, 10.0).looking_at(Vec3::ZERO, Vec3::Y),
-        ..Default::default()
+    // Load the skybox.
+    let skybox_handle = asset_server.load("skybox.png");
+
+    commands.insert_resource(Cubemap {
+        is_loaded: false,
+        image_handle: skybox_handle.clone(),
     });
+
+    // Spawns the camera and skybox.
+    commands.spawn((
+        Camera3dBundle {
+            transform: Transform::from_xyz(0.0, 0.0, 10.0).looking_at(Vec3::ZERO, Vec3::Y),
+            ..Default::default()
+        },
+        Skybox(skybox_handle.clone()),
+    ));
 
     // Spawns the starting area.
     commands
@@ -92,6 +116,34 @@ fn setup_world(
         },
         ..Default::default()
     });
+}
+
+fn correct_skybox(
+    asset_server: Res<AssetServer>,
+    mut images: ResMut<Assets<Image>>,
+    mut cubemap: ResMut<Cubemap>,
+    mut skyboxes: Query<&mut Skybox>,
+) {
+    if !cubemap.is_loaded
+        && asset_server.get_load_state(cubemap.image_handle.clone_weak()) == LoadState::Loaded
+    {
+        let image = images.get_mut(&cubemap.image_handle).unwrap();
+        if image.texture_descriptor.array_layer_count() == 1 {
+            image.reinterpret_stacked_2d_as_array(
+                image.texture_descriptor.size.height / image.texture_descriptor.size.width,
+            );
+            image.texture_view_descriptor = Some(TextureViewDescriptor {
+                dimension: Some(TextureViewDimension::Cube),
+                ..default()
+            });
+        }
+
+        for mut skybox in &mut skyboxes {
+            skybox.0 = cubemap.image_handle.clone();
+        }
+
+        cubemap.is_loaded = true;
+    }
 }
 
 /// Locks the camera to the position of the player.
