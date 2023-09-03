@@ -1,3 +1,5 @@
+use std::f32::consts::PI;
+
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
 
@@ -7,24 +9,26 @@ struct Player;
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
-        .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
-        // .add_plugin(RapierDebugRenderPlugin::default())
-        .add_startup_system(setup)
-        .add_system(follow_player)
-        .add_system(move_player)
+        .add_plugins(RapierPhysicsPlugin::<NoUserData>::default())
+        .add_systems(Startup, setup_world)
+        .add_systems(Update, follow_player)
+        .add_systems(Update, handle_input)
         .run();
 }
 
-fn setup(
+/// Sets up the environment.
+fn setup_world(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
+    // Spawns the camera.
     commands.spawn(Camera3dBundle {
         transform: Transform::from_xyz(0.0, 0.0, 10.0).looking_at(Vec3::ZERO, Vec3::Y),
         ..Default::default()
     });
 
+    // Spawns the starting area.
     commands
         .spawn(Collider::cuboid(100.0, 0.1, 100.0))
         .insert(PbrBundle {
@@ -37,7 +41,7 @@ fn setup(
             material: materials
                 .add(StandardMaterial {
                     base_color: Color::hex("FFFFFF").unwrap(),
-                    perceptual_roughness: 0.5,
+                    perceptual_roughness: 1.,
                     ..default()
                 })
                 .into(),
@@ -45,6 +49,7 @@ fn setup(
         })
         .insert(TransformBundle::from(Transform::from_xyz(0.0, -2.0, 0.0)));
 
+    // Spawn the player as a ball.
     commands
         .spawn(RigidBody::Dynamic)
         .insert(Collider::ball(0.5))
@@ -58,13 +63,14 @@ fn setup(
             mesh: meshes
                 .add(Mesh::from(shape::UVSphere {
                     radius: 0.5,
-                    sectors: 16,
-                    stacks: 16,
+                    sectors: 32,
+                    stacks: 32,
                 }))
                 .into(),
             material: materials
                 .add(StandardMaterial {
-                    base_color: Color::hex("00FF00").unwrap(),
+                    base_color: Color::hex("FF0000").unwrap(),
+                    perceptual_roughness: 0.,
                     ..default()
                 })
                 .into(),
@@ -73,17 +79,22 @@ fn setup(
         .insert(TransformBundle::from(Transform::from_xyz(0.0, 4.0, 0.0)))
         .insert(Player);
 
-    commands.spawn(PointLightBundle {
-        transform: Transform::from_xyz(50.0, 50.0, 50.0),
-        point_light: PointLight {
-            intensity: 600000.,
-            range: 100.,
+    // Spawn a light that acts as sunlight.
+    commands.spawn(DirectionalLightBundle {
+        directional_light: DirectionalLight {
+            illuminance: 10000.,
+            shadows_enabled: true,
+            ..Default::default()
+        },
+        transform: Transform {
+            rotation: Quat::from_scaled_axis(Vec3::new(-PI / 2., 0., 0.)),
             ..default()
         },
-        ..default()
+        ..Default::default()
     });
 }
 
+/// Locks the camera to the position of the player.
 fn follow_player(
     mut camera: Query<&mut Transform, With<Camera>>,
     player: Query<&Transform, (With<Player>, Without<Camera>)>,
@@ -97,17 +108,11 @@ fn follow_player(
     camera.translation.z = player.translation.z + 10.;
 
     // Rotate the camera to look at the ball
-    *camera = camera.looking_at(
-        player.translation,
-        Vec3 {
-            x: 0.0,
-            y: 1.0,
-            z: 0.0,
-        },
-    );
+    *camera = camera.looking_at(player.translation, Vec3::Y);
 }
 
-fn move_player(
+/// A handler for user input.
+fn handle_input(
     mut player: Query<&mut Velocity, With<Player>>,
     keyboard_input: Res<Input<KeyCode>>,
 ) {
