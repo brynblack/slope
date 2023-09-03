@@ -76,18 +76,20 @@ fn setup_world(
                 .into(),
             ..default()
         })
-        .insert(TransformBundle::from(Transform::from_xyz(0.0, -2.0, 0.0)));
+        .insert(TransformBundle::from(
+            Transform::from_xyz(0.0, -2.0, 0.0).with_rotation(Quat::from_rotation_x(-PI / 8.)),
+        ));
 
     // Spawn the player as a ball.
     commands
         .spawn(RigidBody::Dynamic)
         .insert(Collider::ball(0.5))
         .insert(Restitution::coefficient(0.7))
-        .insert(KinematicCharacterController::default())
-        .insert(Velocity {
-            linvel: Vec3::new(0.0, 0.0, 0.0),
-            angvel: Vec3::new(0.0, 0.0, 0.0),
+        .insert(Damping {
+            linear_damping: 0.5,
+            angular_damping: 1.0,
         })
+        .insert(Velocity::zero())
         .insert(PbrBundle {
             mesh: meshes
                 .add(Mesh::from(shape::UVSphere {
@@ -177,18 +179,18 @@ fn handle_input(
     let mut player = player.get_single_mut().unwrap();
 
     if keyboard_input.pressed(KeyCode::S) {
-        player.linvel.x += 0.01;
+        player.linvel.x += 0.1;
     };
 
     if keyboard_input.pressed(KeyCode::W) {
-        player.linvel.z -= 0.01;
+        player.linvel.z -= 0.1;
     };
 
     if keyboard_input.pressed(KeyCode::A) {
-        player.linvel.x -= 0.01;
+        player.linvel.x -= 0.1;
     };
 
     if keyboard_input.pressed(KeyCode::R) {
-        player.linvel.z += 0.01;
+        player.linvel.z += 0.1;
     };
 }
