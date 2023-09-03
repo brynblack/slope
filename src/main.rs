@@ -19,12 +19,17 @@ struct Cubemap {
 
 fn main() {
     App::new()
-        .add_plugins(DefaultPlugins)
+        .add_plugins(DefaultPlugins.set(WindowPlugin {
+            primary_window: Some(Window {
+                title: "Slope".to_string(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        }))
         .add_plugins(RapierPhysicsPlugin::<NoUserData>::default())
+        .insert_resource(Msaa::default())
         .add_systems(Startup, setup_world)
-        .add_systems(Update, correct_skybox)
-        .add_systems(Update, follow_player)
-        .add_systems(Update, handle_input)
+        .add_systems(Update, (correct_skybox, follow_player, handle_input))
         .run();
 }
 
@@ -118,6 +123,7 @@ fn setup_world(
     });
 }
 
+/// Converts the input skybox to a cubemap.
 fn correct_skybox(
     asset_server: Res<AssetServer>,
     mut images: ResMut<Assets<Image>>,
