@@ -5,6 +5,7 @@ use bevy::{
     core_pipeline::Skybox,
     prelude::*,
     render::render_resource::{TextureViewDescriptor, TextureViewDimension},
+    window::WindowMode,
 };
 use bevy_rapier3d::prelude::*;
 
@@ -178,9 +179,11 @@ fn follow_player(
 /// A handler for user input.
 fn handle_input(
     mut player: Query<&mut Velocity, With<Player>>,
+    mut windows: Query<&mut Window>,
     keyboard_input: Res<Input<KeyCode>>,
 ) {
     let mut player = player.get_single_mut().unwrap();
+    let mut window = windows.single_mut();
 
     if keyboard_input.pressed(KeyCode::A) {
         player.linvel.x -= 0.1;
@@ -188,5 +191,12 @@ fn handle_input(
 
     if keyboard_input.pressed(KeyCode::S) {
         player.linvel.x += 0.1;
+    };
+
+    if keyboard_input.just_pressed(KeyCode::F11) {
+        window.mode = match window.mode {
+            WindowMode::BorderlessFullscreen => WindowMode::Windowed,
+            _ => WindowMode::BorderlessFullscreen,
+        }
     };
 }
