@@ -59,12 +59,16 @@ fn setup_world(
 
     // Spawns the starting area.
     commands
-        .spawn(Collider::cuboid(100.0, 0.1, 100.0))
+        .spawn(Collider::cuboid(5.0, 0.5, 25.0))
         .insert(PbrBundle {
             mesh: meshes
-                .add(Mesh::from(shape::Plane {
-                    size: 200.0,
-                    subdivisions: 1,
+                .add(Mesh::from(shape::Box {
+                    min_x: -5.,
+                    max_x: 5.,
+                    min_y: -0.5,
+                    max_y: 0.5,
+                    min_z: -25.,
+                    max_z: 25.,
                 }))
                 .into(),
             material: materials
@@ -178,19 +182,11 @@ fn handle_input(
 ) {
     let mut player = player.get_single_mut().unwrap();
 
-    if keyboard_input.pressed(KeyCode::S) {
-        player.linvel.x += 0.1;
-    };
-
-    if keyboard_input.pressed(KeyCode::W) {
-        player.linvel.z -= 0.1;
-    };
-
     if keyboard_input.pressed(KeyCode::A) {
         player.linvel.x -= 0.1;
     };
 
-    if keyboard_input.pressed(KeyCode::R) {
-        player.linvel.z += 0.1;
+    if keyboard_input.pressed(KeyCode::S) {
+        player.linvel.x += 0.1;
     };
 }
