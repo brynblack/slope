@@ -20,17 +20,27 @@ struct Cubemap {
 
 fn main() {
     App::new()
-        .add_plugins(DefaultPlugins.set(WindowPlugin {
-            primary_window: Some(Window {
-                title: "Slope".to_string(),
+        .add_plugins((
+            DefaultPlugins.set(WindowPlugin {
+                primary_window: Some(Window {
+                    title: "Slope".to_string(),
+                    ..Default::default()
+                }),
                 ..Default::default()
             }),
-            ..Default::default()
-        }))
-        .add_plugins(RapierPhysicsPlugin::<NoUserData>::default())
+            RapierPhysicsPlugin::<NoUserData>::default(),
+        ))
         .insert_resource(Msaa::default())
         .add_systems(Startup, setup_world)
-        .add_systems(Update, (correct_skybox, follow_player, handle_input))
+        .add_systems(
+            Update,
+            (
+                correct_skybox,
+                follow_player,
+                handle_input,
+                generate_floor.run_if(run_once()),
+            ),
+        )
         .run();
 }
 
@@ -50,40 +60,7 @@ fn setup_world(
     });
 
     // Spawns the camera and skybox.
-    commands.spawn((
-        Camera3dBundle {
-            transform: Transform::from_xyz(0.0, 0.0, 10.0).looking_at(Vec3::ZERO, Vec3::Y),
-            ..Default::default()
-        },
-        Skybox(skybox_handle.clone()),
-    ));
-
-    // Spawns the starting area.
-    commands
-        .spawn(Collider::cuboid(5.0, 0.5, 25.0))
-        .insert(PbrBundle {
-            mesh: meshes
-                .add(Mesh::from(shape::Box {
-                    min_x: -5.,
-                    max_x: 5.,
-                    min_y: -0.5,
-                    max_y: 0.5,
-                    min_z: -25.,
-                    max_z: 25.,
-                }))
-                .into(),
-            material: materials
-                .add(StandardMaterial {
-                    base_color: Color::hex("FFFFFF").unwrap(),
-                    perceptual_roughness: 1.,
-                    ..default()
-                })
-                .into(),
-            ..default()
-        })
-        .insert(TransformBundle::from(
-            Transform::from_xyz(0.0, -2.0, 0.0).with_rotation(Quat::from_rotation_x(-PI / 8.)),
-        ));
+    commands.spawn((Camera3dBundle::default(), Skybox(skybox_handle.clone())));
 
     // Spawn the player as a ball.
     commands
@@ -138,7 +115,7 @@ fn correct_skybox(
     mut skyboxes: Query<&mut Skybox>,
 ) {
     if !cubemap.is_loaded
-        && asset_server.get_load_state(cubemap.image_handle.clone_weak()) == LoadState::Loaded
+        && asset_server.get_load_state(cubemap.image_handle.clone_weak()) == Some(LoadState::Loaded)
     {
         let image = images.get_mut(&cubemap.image_handle).unwrap();
         if image.texture_descriptor.array_layer_count() == 1 {
@@ -199,4 +176,40 @@ fn handle_input(
             _ => WindowMode::BorderlessFullscreen,
         }
     };
+}
+
+/// Generates the floor that the player will roll down.
+fn generate_floor(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    player: Query<&Transform, (With<Player>, Without<Camera>)>,
+) {
+    let translation = player.single().translation;
+    commands
+        .spawn(Collider::cuboid(5.0, 0.5, 25.0))
+        .insert(PbrBundle {
+            mesh: meshes
+                .add(Mesh::from(shape::Box {
+                    min_x: -5.,
+                    max_x: 5.,
+                    min_y: -0.5,
+                    max_y: 0.5,
+                    min_z: -25.,
+                    max_z: 25.,
+                }))
+                .into(),
+            material: materials
+                .add(StandardMaterial {
+                    base_color: Color::hex("FFFFFF").unwrap(),
+                    perceptual_roughness: 1.,
+                    ..default()
+                })
+                .into(),
+            ..default()
+        })
+        .insert(TransformBundle::from(
+            Transform::from_xyz(0.0, translation.y - 2.0, 0.0)
+                .with_rotation(Quat::from_rotation_x(-PI / 8.)),
+        ));
 }
