@@ -18,6 +18,13 @@ struct Cubemap {
     image_handle: Handle<Image>,
 }
 
+#[derive(Debug, Default, Clone, Eq, PartialEq, Hash, States)]
+enum AppState {
+    Generated,
+    #[default]
+    Idle,
+}
+
 fn main() {
     App::new()
         .add_plugins((
@@ -38,9 +45,12 @@ fn main() {
                 correct_skybox,
                 follow_player,
                 handle_input,
-                generate_floor.run_if(run_once()),
+                generate_floor.run_if(in_state(AppState::Idle)),
+                check_distance,
             ),
         )
+        .add_event::<GenerateMapEvent>()
+        .add_state::<AppState>()
         .run();
 }
 
@@ -50,6 +60,7 @@ fn setup_world(
     asset_server: Res<AssetServer>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    mut ev_generatemap: EventWriter<GenerateMapEvent>,
 ) {
     // Load the skybox.
     let skybox_handle = asset_server.load("skybox.png");
@@ -71,6 +82,7 @@ fn setup_world(
             linear_damping: 0.5,
             angular_damping: 1.0,
         })
+        .insert(GravityScale(10.0))
         .insert(Velocity::zero())
         .insert(PbrBundle {
             mesh: meshes
@@ -105,6 +117,8 @@ fn setup_world(
         },
         ..Default::default()
     });
+
+    ev_generatemap.send(GenerateMapEvent);
 }
 
 /// Converts the input skybox to a cubemap.
@@ -183,33 +197,57 @@ fn generate_floor(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    mut ev_generatemap: EventReader<GenerateMapEvent>,
     player: Query<&Transform, (With<Player>, Without<Camera>)>,
 ) {
-    let translation = player.single().translation;
-    commands
-        .spawn(Collider::cuboid(5.0, 0.5, 25.0))
-        .insert(PbrBundle {
-            mesh: meshes
-                .add(Mesh::from(shape::Box {
-                    min_x: -5.,
-                    max_x: 5.,
-                    min_y: -0.5,
-                    max_y: 0.5,
-                    min_z: -25.,
-                    max_z: 25.,
-                }))
-                .into(),
-            material: materials
-                .add(StandardMaterial {
-                    base_color: Color::hex("FFFFFF").unwrap(),
-                    perceptual_roughness: 1.,
-                    ..default()
-                })
-                .into(),
-            ..default()
-        })
-        .insert(TransformBundle::from(
-            Transform::from_xyz(0.0, translation.y - 2.0, 0.0)
-                .with_rotation(Quat::from_rotation_x(-PI / 8.)),
-        ));
+    for _ev in ev_generatemap.read() {
+        let translation = player.single().translation;
+        commands
+            .spawn(Collider::cuboid(5.0, 0.5, 25.0))
+            .insert(PbrBundle {
+                mesh: meshes
+                    .add(Mesh::from(shape::Box {
+                        min_x: -5.,
+                        max_x: 5.,
+                        min_y: -0.5,
+                        max_y: 0.5,
+                        min_z: -25.,
+                        max_z: 25.,
+                    }))
+                    .into(),
+                material: materials
+                    .add(StandardMaterial {
+                        base_color: Color::hex("FFFFFF").unwrap(),
+                        perceptual_roughness: 1.,
+                        ..default()
+                    })
+                    .into(),
+                ..default()
+            })
+            .insert(TransformBundle::from(
+                Transform::from_xyz(translation.x, translation.y - 2.0, translation.z)
+                    .with_rotation(Quat::from_rotation_x(-PI / 8.)),
+            ));
+    }
+}
+
+#[derive(Event)]
+struct GenerateMapEvent;
+
+fn check_distance(
+    mut ev_generatemap: EventWriter<GenerateMapEvent>,
+    query: Query<&Transform, (With<Player>, Without<Camera>)>,
+    mut next_state: ResMut<NextState<AppState>>,
+) {
+    for transform in query.iter() {
+        match transform.translation.z.ceil().abs() % 10. == 0. {
+            true => {
+                ev_generatemap.send(GenerateMapEvent);
+                next_state.set(AppState::Generated);
+            }
+            false => {
+                next_state.set(AppState::Idle);
+            }
+        }
+    }
 }
